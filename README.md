@@ -20,6 +20,33 @@ sudo apt install ffmpeg   # Raspberry Pi OS / Debian 系
 
 ## セットアップ
 
+### かんたんセットアップ（ラズパイ推奨）
+
+Go・ffmpeg の確認とインストール、ビルド、設定生成までをまとめて行うスクリプトを用意しています。
+
+```bash
+git clone <このリポジトリ> mediavault && cd mediavault
+./scripts/setup.sh
+```
+
+スクリプトは以下を自動で行います。
+
+- Go（1.25 以上）の有無を確認し、無ければ公式バイナリをアーキテクチャ（arm64/armv6l 等）に合わせてインストール
+- `ffmpeg` の有無を確認し、無ければ `apt` でインストール（任意）
+- MediaVault のビルド
+- `config.yaml` の作成とログインパスワードの設定（任意）
+
+主なオプション:
+
+```bash
+./scripts/setup.sh --install-service   # systemd サービスとして常駐登録まで行う
+./scripts/setup.sh --yes               # 確認プロンプトを省略
+./scripts/setup.sh --skip-go           # Go のインストールをスキップ
+./scripts/setup.sh --help              # ヘルプ
+```
+
+### 手動セットアップ
+
 ```bash
 # 1. ビルド
 go build -o mediavault ./cmd/mediavault
