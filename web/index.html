@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>MediaVault</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <!-- ログイン画面 -->
+  <div id="login" class="login hidden">
+    <form id="login-form" class="login-card">
+      <h1>MediaVault</h1>
+      <input id="login-user" type="text" placeholder="ユーザー名" autocomplete="username" autofocus>
+      <input id="login-pass" type="password" placeholder="パスワード" autocomplete="current-password">
+      <button type="submit">ログイン</button>
+      <p id="login-error" class="login-error"></p>
+    </form>
+  </div>
+
+  <!-- メイン -->
+  <div id="app" class="app hidden">
+    <header class="header">
+      <button id="menu-toggle" class="icon-btn" title="メニュー">☰</button>
+      <div class="brand">MediaVault</div>
+      <form id="search-form" class="search">
+        <input id="search-input" type="search" placeholder="ファイル名・フォルダ名で検索…">
+      </form>
+      <button id="logout-btn" class="icon-btn" title="ログアウト">⏻</button>
+    </header>
+
+    <div class="body">
+      <aside id="sidebar" class="sidebar">
+        <div class="side-section">
+          <h2>★ お気に入り</h2>
+          <ul id="fav-list" class="fav-list"></ul>
+        </div>
+        <div class="side-section">
+          <h2>📂 ライブラリ</h2>
+          <ul id="tree" class="tree"></ul>
+        </div>
+      </aside>
+
+      <main class="main">
+        <div class="toolbar">
+          <nav id="breadcrumb" class="breadcrumb"></nav>
+          <button id="fav-folder" class="fav-folder" title="このフォルダをお気に入り">☆</button>
+        </div>
+        <div id="grid" class="grid"></div>
+        <div id="empty" class="empty hidden">アイテムがありません</div>
+      </main>
+    </div>
+  </div>
+
+  <!-- 画像ビューア（漫画モード） -->
+  <div id="viewer" class="viewer hidden">
+    <div class="viewer-bar">
+      <button id="viewer-close" class="icon-btn">✕</button>
+      <span id="viewer-title"></span>
+      <button id="viewer-fav" class="icon-btn">☆</button>
+    </div>
+    <div class="viewer-stage">
+      <div id="viewer-prev" class="nav-zone left">‹</div>
+      <img id="viewer-img" alt="">
+      <div id="viewer-next" class="nav-zone right">›</div>
+    </div>
+    <div id="viewer-counter" class="viewer-counter"></div>
+  </div>
+
+  <!-- 動画モーダル -->
+  <div id="player" class="player hidden">
+    <div class="player-card">
+      <div class="player-bar">
+        <span id="player-title"></span>
+        <button id="player-fav" class="icon-btn">☆</button>
+        <button id="player-close" class="icon-btn">✕</button>
+      </div>
+      <video id="player-video" controls preload="metadata"></video>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

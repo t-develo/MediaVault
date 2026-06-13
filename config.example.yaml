@@ -1,0 +1,36 @@
+# MediaVault 設定ファイルの例。
+# このファイルを config.yaml にコピーして編集してください。
+
+# 待ち受けアドレス。LAN内の他端末から見るには 0.0.0.0 を使用。
+listen: "0.0.0.0:8080"
+
+# 公開するメディアフォルダ（HDDのマウント先など）。
+media_root: "/mnt/hdd/media"
+
+# サムネイル等のキャッシュ保存先。
+cache_dir: "./cache"
+
+# SQLite データベースの保存先（お気に入り・セッション・ログイン試行）。
+db_path: "./mediavault.db"
+
+# ログインセッションの有効日数。
+session_ttl_days: 30
+
+# リバースプロキシ経由で運用する場合のみ true（X-Forwarded-For を信頼）。
+trust_proxy: false
+
+# 単一ユーザーの認証情報。
+# password_hash は `mediavault setuser -u <名前>` で生成して貼り付けます。
+auth:
+  username: "admin"
+  password_hash: ""   # 例: "$2a$10$......"
+
+# 連続ログイン失敗時のIPブロック。
+ipblock:
+  max_failures: 5    # この回数連続で失敗するとブロック
+  block_minutes: 15  # ブロック継続時間（分）
+
+# 対象とする拡張子。
+extensions:
+  image: [jpg, jpeg, png, gif, webp]
+  video: [mp4, m4v, webm]

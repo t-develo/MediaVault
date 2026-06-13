@@ -1,0 +1,11 @@
+# ビルド成果物
+/mediavault
+/mediavault-*
+*.exe
+
+# ローカル設定・データ
+/config.yaml
+/cache/
+*.db
+*.db-shm
+*.db-wal
