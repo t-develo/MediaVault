@@ -41,7 +41,8 @@ async function init() {
     await api.get("/api/me");
     showApp();
     await Promise.all([loadFavorites(), loadTree()]);
-    await navigate("/");
+    history.replaceState({ view: "dir", path: "/" }, "");
+    await navigate("/", false);
   } catch {
     showLogin();
   }
@@ -60,8 +61,9 @@ function bindEvents() {
 
   // 画像ビューア
   $("viewer-close").addEventListener("click", closeViewer);
-  $("viewer-prev").addEventListener("click", () => stepViewer(-1));
-  $("viewer-next").addEventListener("click", () => stepViewer(1));
+  // 右綴じ: 左ゾーン=次 / 右ゾーン=前
+  $("viewer-prev").addEventListener("click", () => stepViewer(1));
+  $("viewer-next").addEventListener("click", () => stepViewer(-1));
   $("viewer-fav").addEventListener("click", () => toggleFavByPath(viewerImages[viewerIndex]?.path, "file", $("viewer-fav")));
 
   // 動画
@@ -69,20 +71,29 @@ function bindEvents() {
   $("player-fav").addEventListener("click", () => toggleFavByPath($("player").dataset.path, "file", $("player-fav")));
 
   document.addEventListener("keydown", onKey);
+  window.addEventListener("popstate", onPopState);
 
-  // スワイプ（ビューア）
-  let sx = 0;
-  $("viewer").addEventListener("touchstart", (e) => sx = e.touches[0].clientX, { passive: true });
+  // スワイプ（ビューア）: 横=ページ送り（右綴じ） / 下=閉じる
+  let sx = 0, sy = 0;
+  $("viewer").addEventListener("touchstart", (e) => {
+    sx = e.touches[0].clientX;
+    sy = e.touches[0].clientY;
+  }, { passive: true });
   $("viewer").addEventListener("touchend", (e) => {
     const dx = e.changedTouches[0].clientX - sx;
-    if (Math.abs(dx) > 50) stepViewer(dx < 0 ? 1 : -1);
+    const dy = e.changedTouches[0].clientY - sy;
+    if (Math.abs(dy) > Math.abs(dx)) {
+      if (dy > 80) closeViewer();        // 下スワイプで閉じる
+    } else if (Math.abs(dx) > 50) {
+      stepViewer(dx > 0 ? 1 : -1);       // 右スワイプ=次 / 左スワイプ=前
+    }
   }, { passive: true });
 }
 
 function onKey(e) {
   if (!$("viewer").classList.contains("hidden")) {
-    if (e.key === "ArrowRight") stepViewer(1);
-    else if (e.key === "ArrowLeft") stepViewer(-1);
+    if (e.key === "ArrowLeft") stepViewer(1);
+    else if (e.key === "ArrowRight") stepViewer(-1);
     else if (e.key === "Escape") closeViewer();
   } else if (!$("player").classList.contains("hidden")) {
     if (e.key === "Escape") closePlayer();
@@ -102,7 +113,8 @@ async function onLogin(e) {
     $("login-pass").value = "";
     showApp();
     await Promise.all([loadFavorites(), loadTree()]);
-    await navigate("/");
+    history.replaceState({ view: "dir", path: "/" }, "");
+    await navigate("/", false);
   } else {
     const data = await r.json().catch(() => ({}));
     errEl.textContent = data.error || "ログインに失敗しました";
@@ -115,8 +127,12 @@ async function onLogout() {
 }
 
 // ===== ナビゲーション / 一覧 =====
-async function navigate(path) {
-  currentPath = path || "/";
+async function navigate(path, push = true) {
+  const target = path || "/";
+  if (push && target !== currentPath) {
+    history.pushState({ view: "dir", path: target }, "");
+  }
+  currentPath = target;
   $("sidebar").classList.remove("open");
   const data = await api.get("/api/list?path=" + enc(currentPath));
   currentEntries = data.entries || [];
@@ -124,6 +140,25 @@ async function navigate(path) {
   renderGrid(currentEntries);
   updateFolderFavStar();
   markActiveTreeNode();
+}
+
+// ブラウザの戻る/進む: オーバーレイを閉じる → ディレクトリ移動
+function onPopState(e) {
+  const st = e.state || { view: "dir", path: "/" };
+  const wantViewer = st.view === "viewer";
+  const wantPlayer = st.view === "player";
+  if (!wantViewer && !$("viewer").classList.contains("hidden")) hideViewer();
+  if (!wantPlayer && !$("player").classList.contains("hidden")) hidePlayer();
+  if (st.view === "dir" && st.path && st.path !== currentPath) {
+    navigate(st.path, false);
+  } else if (wantViewer && $("viewer").classList.contains("hidden")) {
+    // 進む操作でのビューア復元（best-effort）
+    const entry = currentEntries.find((x) => x.path === st.path);
+    if (entry) openViewer(entry, false);
+  } else if (wantPlayer && $("player").classList.contains("hidden")) {
+    const entry = currentEntries.find((x) => x.path === st.path);
+    if (entry) openPlayer(entry, false);
+  }
 }
 
 function renderBreadcrumb() {
@@ -205,11 +240,12 @@ function openEntry(e) {
 }
 
 // ===== 画像ビューア =====
-function openViewer(entry) {
+function openViewer(entry, push = true) {
   viewerImages = currentEntries.filter((e) => e.kind === "image");
   viewerIndex = Math.max(0, viewerImages.findIndex((e) => e.path === entry.path));
   $("viewer").classList.remove("hidden");
   showViewerImage();
+  if (push) history.pushState({ view: "viewer", path: entry.path }, "");
 }
 
 function showViewerImage() {
@@ -237,13 +273,18 @@ function stepViewer(d) {
   showViewerImage();
 }
 
+// ユーザー操作（✕ / Escape / 下スワイプ）: 履歴を戻して popstate で閉じる
 function closeViewer() {
+  history.back();
+}
+
+function hideViewer() {
   $("viewer").classList.add("hidden");
   $("viewer-img").src = "";
 }
 
 // ===== 動画 =====
-function openPlayer(e) {
+function openPlayer(e, push = true) {
   $("player").classList.remove("hidden");
   $("player").dataset.path = e.path;
   $("player-title").textContent = e.name;
@@ -251,9 +292,15 @@ function openPlayer(e) {
   const v = $("player-video");
   v.src = "/api/media?path=" + enc(e.path);
   v.play().catch(() => {});
+  if (push) history.pushState({ view: "player", path: e.path }, "");
 }
 
+// ユーザー操作（✕ / Escape）: 履歴を戻して popstate で閉じる
 function closePlayer() {
+  history.back();
+}
+
+function hidePlayer() {
   const v = $("player-video");
   v.pause(); v.removeAttribute("src"); v.load();
   $("player").classList.add("hidden");
