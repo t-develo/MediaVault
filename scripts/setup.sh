@@ -10,9 +10,12 @@
 #   ./scripts/setup.sh                 # 依存確認＋ビルド（対話あり）
 #   ./scripts/setup.sh --yes           # 確認プロンプトを省略
 #   ./scripts/setup.sh --install-service   # systemd サービスも登録
+#   ./scripts/setup.sh --install-auto-deploy   # main 監視の自動デプロイ timer も登録
 #   ./scripts/setup.sh --skip-go       # Go のインストールをスキップ
 #   ./scripts/setup.sh --skip-ffmpeg   # ffmpeg のインストールをスキップ
 #   ./scripts/setup.sh --go-version 1.25.11   # 入れる Go のバージョンを指定
+#   ./scripts/setup.sh --deploy-branch main   # 自動デプロイで監視するブランチ
+#   ./scripts/setup.sh --deploy-interval 2min # 自動デプロイのポーリング間隔
 #
 set -euo pipefail
 
@@ -27,7 +30,10 @@ ASSUME_YES=0
 SKIP_GO=0
 SKIP_FFMPEG=0
 INSTALL_SERVICE=0
+INSTALL_AUTO_DEPLOY=0
 GO_VERSION="$DEFAULT_GO_VERSION"
+DEPLOY_BRANCH="main"        # 自動デプロイで監視するブランチ
+DEPLOY_INTERVAL="2min"      # 自動デプロイのポーリング間隔（systemd OnUnitActiveSec 形式）
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -35,6 +41,9 @@ while [ $# -gt 0 ]; do
     --skip-go) SKIP_GO=1 ;;
     --skip-ffmpeg) SKIP_FFMPEG=1 ;;
     --install-service) INSTALL_SERVICE=1 ;;
+    --install-auto-deploy) INSTALL_AUTO_DEPLOY=1 ;;
+    --deploy-branch) DEPLOY_BRANCH="${2:?--deploy-branch には値が必要です}"; shift ;;
+    --deploy-interval) DEPLOY_INTERVAL="${2:?--deploy-interval には値が必要です}"; shift ;;
     --go-version) GO_VERSION="${2:?--go-version には値が必要です}"; shift ;;
     -h|--help)
       # 先頭の連続コメント（ドキュメントブロック）のみ表示
@@ -263,6 +272,63 @@ EOF
   c_ok "mediavault サービスを有効化・起動しました（systemctl status mediavault で確認）。"
 }
 
+# ---- 自動デプロイ（main 監視 → pull/build/restart）の systemd timer ----
+install_auto_deploy() {
+  local user; user="$(id -un)"
+  local deploy_svc="/etc/systemd/system/mediavault-deploy.service"
+  local deploy_timer="/etc/systemd/system/mediavault-deploy.timer"
+
+  c_info "自動デプロイ用 systemd ユニットを作成します。"
+
+  # deploy.sh は systemctl restart のため sudo を呼ぶ。
+  # 非 root 運用では NOPASSWD の sudoers を入れておくと timer から無人実行できる。
+  if [ "$user" != "root" ]; then
+    local sudoers="/etc/sudoers.d/mediavault-deploy"
+    if confirm "再起動を無人実行できるよう sudoers（$user に systemctl restart mediavault のみ許可）を作成しますか？"; then
+      as_root tee "$sudoers" >/dev/null <<EOF
+$user ALL=(root) NOPASSWD: /bin/systemctl restart mediavault, /usr/bin/systemctl restart mediavault
+EOF
+      as_root chmod 0440 "$sudoers"
+      c_ok "sudoers を作成しました: $sudoers"
+    else
+      c_warn "sudoers をスキップしました。timer からの再起動には別途権限設定が必要です。"
+    fi
+  fi
+
+  as_root tee "$deploy_svc" >/dev/null <<EOF
+[Unit]
+Description=MediaVault auto-deploy (pull/build/restart on $DEPLOY_BRANCH change)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=$REPO_DIR
+ExecStart=$REPO_DIR/scripts/deploy.sh --branch $DEPLOY_BRANCH --service mediavault
+User=$user
+EOF
+
+  as_root tee "$deploy_timer" >/dev/null <<EOF
+[Unit]
+Description=MediaVault auto-deploy timer
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=$DEPLOY_INTERVAL
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+
+  as_root systemctl daemon-reload
+  as_root systemctl enable --now mediavault-deploy.timer
+  c_ok "自動デプロイ timer を有効化しました（${DEPLOY_INTERVAL}ごとに $DEPLOY_BRANCH を監視）。"
+  echo "  状態確認: systemctl list-timers mediavault-deploy.timer"
+  echo "  ログ確認: journalctl -u mediavault-deploy.service -f"
+  echo "  手動実行: $REPO_DIR/scripts/deploy.sh --branch $DEPLOY_BRANCH"
+}
+
 # ---- メイン ----
 main() {
   c_info "MediaVault セットアップを開始します（$REPO_DIR）"
@@ -277,6 +343,17 @@ main() {
       c_warn "config.yaml が無いためサービス登録をスキップします。先に作成してください。"
     elif confirm "systemd サービスとして常駐させますか？"; then
       install_systemd_service
+    fi
+  fi
+
+  if [ "$INSTALL_AUTO_DEPLOY" = "1" ]; then
+    if ! command -v systemctl >/dev/null 2>&1; then
+      c_warn "systemctl が無いため自動デプロイの登録をスキップします。"
+    elif ! systemctl list-unit-files mediavault.service >/dev/null 2>&1 \
+         || ! systemctl cat mediavault.service >/dev/null 2>&1; then
+      c_warn "mediavault.service が見つかりません。先に --install-service で常駐登録してください（自動デプロイは再起動対象が必要です）。"
+    elif confirm "main 監視の自動デプロイ（${DEPLOY_INTERVAL}ごとに pull/build/restart）を登録しますか？"; then
+      install_auto_deploy
     fi
   fi
 
