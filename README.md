@@ -99,6 +99,52 @@ WantedBy=multi-user.target
 sudo systemctl enable --now mediavault
 ```
 
+## 自動デプロイ（main の変更を自動反映）
+
+GitHub の `main` ブランチに変更が入ったら、ラズパイ側で自動的に pull → ビルド → 再起動する仕組みを同梱しています。家庭内LAN（NAT配下）でも使えるよう、**ラズパイから定期的に GitHub を確認するプル型**です。
+
+`scripts/deploy.sh` が次を行います。
+
+- `git fetch` で `origin/main` との差分を確認。変更が無ければ即終了。
+- 変更があれば `origin/main` に同期し、**一時バイナリにビルド**（失敗しても稼働中のバイナリは無傷）。
+- 成功したらバイナリを差し替えてサービスを再起動。
+- 再起動後に **ヘルスチェック**（`listen` のポートへHTTP応答確認）。失敗時は**旧バイナリへ自動ロールバック**。
+- `flock` で多重実行を防止するため、timer 実行が重なっても安全です。
+
+`config.yaml` / `*.db` / `cache/` は `.gitignore` 済みのため、同期で失われません。
+
+### セットアップ（systemd timer で定期実行）
+
+先に `--install-service` で常駐登録したうえで、自動デプロイを登録します。
+
+```bash
+./scripts/setup.sh --install-service --install-auto-deploy
+```
+
+オプション:
+
+```bash
+./scripts/setup.sh --install-auto-deploy --deploy-branch main --deploy-interval 2min
+```
+
+これにより以下の systemd ユニットが作られます。
+
+- `mediavault-deploy.service`（oneshot で `deploy.sh` を実行）
+- `mediavault-deploy.timer`（既定 2 分間隔で起動）
+
+非 root 運用では、timer から無人で再起動できるよう `systemctl restart mediavault` のみ許可する sudoers（`/etc/sudoers.d/mediavault-deploy`）を任意で作成します。
+
+```bash
+# 状態確認
+systemctl list-timers mediavault-deploy.timer
+# ログ確認（デプロイの履歴・成否）
+journalctl -u mediavault-deploy.service -f
+# 手動で1回実行
+./scripts/deploy.sh --branch main
+```
+
+> ポーリング間隔ぶんの反映遅延（既定で最大2分）があります。push と同時にデプロイしたい、ラズパイのビルド負荷を避けたい場合は、GitHub Actions でのクロスコンパイル配布やセルフホストランナー方式への拡張も可能です。
+
 ## コマンド
 
 | コマンド | 説明 |
