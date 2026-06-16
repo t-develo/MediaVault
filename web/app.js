@@ -56,11 +56,18 @@ function bindEvents() {
   $("login-form").addEventListener("submit", onLogin);
   $("logout-btn").addEventListener("click", onLogout);
   $("search-form").addEventListener("submit", onSearch);
-  $("menu-toggle").addEventListener("click", () => $("sidebar").classList.toggle("open"));
+  $("menu-toggle").addEventListener("click", () => {
+    if (window.matchMedia("(max-width: 720px)").matches) {
+      $("sidebar").classList.toggle("open");                 // モバイル: ドロワー
+    } else {
+      document.body.classList.toggle("sidebar-collapsed");   // デスクトップ: 折りたたみ
+    }
+  });
   $("fav-folder").addEventListener("click", toggleCurrentFolderFav);
 
   // 画像ビューア
   $("viewer-close").addEventListener("click", closeViewer);
+  $("viewer-reload").addEventListener("click", reloadViewerImage);
   // 右綴じ: 左ゾーン=次 / 右ゾーン=前
   $("viewer-prev").addEventListener("click", () => stepViewer(1));
   $("viewer-next").addEventListener("click", () => stepViewer(-1));
@@ -248,15 +255,33 @@ function openViewer(entry, push = true) {
   if (push) history.pushState({ view: "viewer", path: entry.path }, "");
 }
 
+function showSpinner() { $("viewer-spinner").classList.remove("hidden"); }
+function hideSpinner() { $("viewer-spinner").classList.add("hidden"); }
+
 function showViewerImage() {
   const e = viewerImages[viewerIndex];
   if (!e) return;
-  $("viewer-img").src = "/api/media?path=" + enc(e.path);
+  const img = $("viewer-img");
+  showSpinner();
+  img.onload = hideSpinner;
+  img.onerror = hideSpinner;
+  img.src = "/api/media?path=" + enc(e.path);
   $("viewer-title").textContent = e.name;
   $("viewer-counter").textContent = `${viewerIndex + 1} / ${viewerImages.length}`;
   $("viewer-fav").textContent = favSet.has(e.path) ? "★" : "☆";
   preload(viewerIndex + 1);
   preload(viewerIndex - 1);
+}
+
+// 表示中の画像を再取得（キャッシュ回避クエリ付き）
+function reloadViewerImage() {
+  const e = viewerImages[viewerIndex];
+  if (!e) return;
+  const img = $("viewer-img");
+  showSpinner();
+  img.onload = hideSpinner;
+  img.onerror = hideSpinner;
+  img.src = "/api/media?path=" + enc(e.path) + "&_=" + Date.now();
 }
 
 function preload(i) {
