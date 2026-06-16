@@ -85,9 +85,14 @@ button { font: inherit; cursor: pointer; }
   background: var(--panel-2);
   color: var(--text);
 }
-#menu-toggle { display: none; }
+#menu-toggle { display: block; }
 
 .body { flex: 1; display: flex; min-height: 0; }
+
+/* デスクトップでのサイドバー折りたたみ */
+@media (min-width: 721px) {
+  body.sidebar-collapsed .sidebar { display: none; }
+}
 
 .sidebar {
   width: 260px;
@@ -186,6 +191,18 @@ button { font: inherit; cursor: pointer; }
   color: #fff; background: rgba(0,0,0,.5); padding: 4px 12px; border-radius: 999px; font-size: 14px;
 }
 
+/* ---- ロード中スピナー ---- */
+.spinner {
+  position: absolute; top: 50%; left: 50%;
+  width: 48px; height: 48px; margin: -24px 0 0 -24px;
+  border: 4px solid rgba(255,255,255,.25);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin .8s linear infinite;
+  pointer-events: none;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
 /* ---- 動画 ---- */
 .player { position: fixed; inset: 0; background: rgba(0,0,0,.85); z-index: 50; display: grid; place-items: center; }
 .player-card { width: min(960px, 94vw); background: var(--panel); border-radius: 12px; overflow: hidden; }
@@ -195,7 +212,6 @@ button { font: inherit; cursor: pointer; }
 
 /* ---- レスポンシブ ---- */
 @media (max-width: 720px) {
-  #menu-toggle { display: block; }
   .sidebar {
     position: fixed; top: 0; bottom: 0; left: 0; z-index: 40;
     transform: translateX(-100%); transition: transform .2s ease;
