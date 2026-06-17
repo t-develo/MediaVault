@@ -31,6 +31,7 @@ let currentEntries = [];   // 現在のフォルダのエントリ
 let viewerImages = [];     // 画像ビューアの対象一覧
 let viewerIndex = 0;
 let favSet = new Set();     // お気に入りパス集合
+let volNavCache = { parent: null, folders: [] }; // 巻ナビ: 親フォルダの兄弟一覧キャッシュ
 
 // ===== 起動 =====
 window.addEventListener("DOMContentLoaded", init);
@@ -51,6 +52,12 @@ async function init() {
 function showLogin() { $("login").classList.remove("hidden"); $("app").classList.add("hidden"); }
 function showApp() { $("login").classList.add("hidden"); $("app").classList.remove("hidden"); }
 
+// サイドバー（モバイルドロワー）の開閉とバックドロップ表示を同期
+function setSidebarOpen(open) {
+  $("sidebar").classList.toggle("open", open);
+  $("sidebar-backdrop").classList.toggle("hidden", !open);
+}
+
 // ===== イベント =====
 function bindEvents() {
   $("login-form").addEventListener("submit", onLogin);
@@ -58,11 +65,12 @@ function bindEvents() {
   $("search-form").addEventListener("submit", onSearch);
   $("menu-toggle").addEventListener("click", () => {
     if (window.matchMedia("(max-width: 720px)").matches) {
-      $("sidebar").classList.toggle("open");                 // モバイル: ドロワー
+      setSidebarOpen(!$("sidebar").classList.contains("open")); // モバイル: ドロワー
     } else {
-      document.body.classList.toggle("sidebar-collapsed");   // デスクトップ: 折りたたみ
+      document.body.classList.toggle("sidebar-collapsed");      // デスクトップ: 折りたたみ
     }
   });
+  $("sidebar-backdrop").addEventListener("click", () => setSidebarOpen(false));
   $("fav-folder").addEventListener("click", toggleCurrentFolderFav);
 
   // 画像ビューア
@@ -140,13 +148,51 @@ async function navigate(path, push = true) {
     history.pushState({ view: "dir", path: target }, "");
   }
   currentPath = target;
-  $("sidebar").classList.remove("open");
+  setSidebarOpen(false);
   const data = await api.get("/api/list?path=" + enc(currentPath));
   currentEntries = data.entries || [];
   renderBreadcrumb();
   renderGrid(currentEntries);
   updateFolderFavStar();
   markActiveTreeNode();
+  updateVolumeNav();
+}
+
+// 前の巻/次の巻ナビ: 画像を含む巻フォルダのみ、同じ親フォルダ内の隣を辿る
+async function updateVolumeNav() {
+  const bars = [$("volnav-top"), $("volnav-bottom")];
+  const hideAll = () => bars.forEach((b) => b.classList.add("hidden"));
+
+  // 画像を含む巻フォルダのみ対象（ルートは除外）
+  const hasImage = currentEntries.some((e) => e.kind === "image");
+  if (!hasImage || !currentPath || currentPath === "/") { hideAll(); return; }
+
+  const parent = currentPath.substring(0, currentPath.lastIndexOf("/")) || "/";
+  let siblings;
+  if (volNavCache.parent === parent) {
+    siblings = volNavCache.folders;
+  } else {
+    try {
+      const data = await api.get("/api/tree?path=" + enc(parent));
+      siblings = data.folders || [];
+    } catch { hideAll(); return; }
+    volNavCache = { parent, folders: siblings };
+  }
+
+  const idx = siblings.findIndex((f) => f.path === currentPath);
+  if (idx === -1 || siblings.length <= 1) { hideAll(); return; }
+  const prev = idx > 0 ? siblings[idx - 1] : null;
+  const next = idx < siblings.length - 1 ? siblings[idx + 1] : null;
+
+  for (const bar of bars) {
+    bar.classList.remove("hidden");
+    const pBtn = bar.querySelector(".volnav-prev");
+    const nBtn = bar.querySelector(".volnav-next");
+    pBtn.classList.toggle("hidden", !prev);
+    nBtn.classList.toggle("hidden", !next);
+    if (prev) { pBtn.textContent = "← 前の巻: " + prev.name; pBtn.onclick = () => navigate(prev.path); }
+    if (next) { nBtn.textContent = "次の巻: " + next.name + " →"; nBtn.onclick = () => navigate(next.path); }
+  }
 }
 
 // ブラウザの戻る/進む: オーバーレイを閉じる → ディレクトリ移動
@@ -338,6 +384,8 @@ async function onSearch(e) {
   if (!q) { navigate(currentPath); return; }
   const data = await api.get("/api/search?q=" + enc(q));
   currentEntries = data.results || [];
+  $("volnav-top").classList.add("hidden");
+  $("volnav-bottom").classList.add("hidden");
   $("breadcrumb").innerHTML = "";
   const label = document.createElement("span");
   label.textContent = `「${q}」の検索結果: ${currentEntries.length}件`;

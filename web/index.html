@@ -40,14 +40,23 @@
           <ul id="tree" class="tree"></ul>
         </div>
       </aside>
+      <div id="sidebar-backdrop" class="sidebar-backdrop hidden"></div>
 
       <main class="main">
         <div class="toolbar">
           <nav id="breadcrumb" class="breadcrumb"></nav>
           <button id="fav-folder" class="fav-folder" title="このフォルダをお気に入り">☆</button>
         </div>
+        <div id="volnav-top" class="volnav hidden">
+          <button class="volnav-prev fav-folder" type="button"></button>
+          <button class="volnav-next fav-folder" type="button"></button>
+        </div>
         <div id="grid" class="grid"></div>
         <div id="empty" class="empty hidden">アイテムがありません</div>
+        <div id="volnav-bottom" class="volnav hidden">
+          <button class="volnav-prev fav-folder" type="button"></button>
+          <button class="volnav-next fav-folder" type="button"></button>
+        </div>
       </main>
     </div>
   </div>
