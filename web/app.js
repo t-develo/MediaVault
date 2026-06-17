@@ -149,13 +149,18 @@ async function navigate(path, push = true) {
   }
   currentPath = target;
   setSidebarOpen(false);
-  const data = await api.get("/api/list?path=" + enc(currentPath));
-  currentEntries = data.entries || [];
-  renderBreadcrumb();
-  renderGrid(currentEntries);
-  updateFolderFavStar();
-  markActiveTreeNode();
-  updateVolumeNav();
+  showLoading();
+  try {
+    const data = await api.get("/api/list?path=" + enc(currentPath));
+    currentEntries = data.entries || [];
+    renderBreadcrumb();
+    renderGrid(currentEntries);
+    updateFolderFavStar();
+    markActiveTreeNode();
+    updateVolumeNav();
+  } finally {
+    hideLoading();
+  }
 }
 
 // 前の巻/次の巻ナビ: 画像を含む巻フォルダのみ、同じ親フォルダ内の隣を辿る
@@ -304,6 +309,10 @@ function openViewer(entry, push = true) {
 function showSpinner() { $("viewer-spinner").classList.remove("hidden"); }
 function hideSpinner() { $("viewer-spinner").classList.add("hidden"); }
 
+// 読み込み中の全画面オーバーレイ（フォルダ移動・検索などの待ち時間に表示）
+function showLoading() { $("loading-overlay").classList.remove("hidden"); }
+function hideLoading() { $("loading-overlay").classList.add("hidden"); }
+
 function showViewerImage() {
   const e = viewerImages[viewerIndex];
   if (!e) return;
@@ -382,15 +391,20 @@ async function onSearch(e) {
   e.preventDefault();
   const q = $("search-input").value.trim();
   if (!q) { navigate(currentPath); return; }
-  const data = await api.get("/api/search?q=" + enc(q));
-  currentEntries = data.results || [];
-  $("volnav-top").classList.add("hidden");
-  $("volnav-bottom").classList.add("hidden");
-  $("breadcrumb").innerHTML = "";
-  const label = document.createElement("span");
-  label.textContent = `「${q}」の検索結果: ${currentEntries.length}件`;
-  $("breadcrumb").appendChild(label);
-  renderGrid(currentEntries);
+  showLoading();
+  try {
+    const data = await api.get("/api/search?q=" + enc(q));
+    currentEntries = data.results || [];
+    $("volnav-top").classList.add("hidden");
+    $("volnav-bottom").classList.add("hidden");
+    $("breadcrumb").innerHTML = "";
+    const label = document.createElement("span");
+    label.textContent = `「${q}」の検索結果: ${currentEntries.length}件`;
+    $("breadcrumb").appendChild(label);
+    renderGrid(currentEntries);
+  } finally {
+    hideLoading();
+  }
 }
 
 // ===== お気に入り =====
