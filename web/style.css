@@ -74,6 +74,8 @@ button { font: inherit; cursor: pointer; }
   padding: 8px 12px;
   background: var(--panel);
   border-bottom: 1px solid var(--border);
+  position: relative;
+  z-index: 45;
 }
 .brand { font-weight: 700; font-size: 18px; }
 .search { flex: 1; }
@@ -128,6 +130,17 @@ button { font: inherit; cursor: pointer; }
 .breadcrumb a { color: var(--accent); cursor: pointer; text-decoration: none; }
 .breadcrumb .sep { color: var(--muted); }
 .fav-folder { background: transparent; border: 1px solid var(--border); border-radius: 8px; color: var(--gold); font-size: 18px; padding: 4px 10px; }
+
+.volnav { display: flex; gap: 8px; margin: 12px 0; }
+.volnav .fav-folder {
+  flex: 1;
+  color: var(--text);
+  font-size: 14px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  padding: 8px 12px;
+}
+.volnav .fav-folder:hover { background: var(--panel-2); }
+.volnav .volnav-next { text-align: right; }
 
 .grid {
   display: grid;
@@ -219,4 +232,10 @@ button { font: inherit; cursor: pointer; }
   }
   .sidebar.open { transform: translateX(0); }
   .brand { display: none; }
+
+  .sidebar-backdrop {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,.5);
+    z-index: 39;
+  }
 }
