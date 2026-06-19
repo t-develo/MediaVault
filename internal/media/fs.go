@@ -76,15 +76,29 @@ func (l *Library) classify(name string, isDir bool) (Kind, bool) {
 	return "", false
 }
 
+// browserNativeVideo はブラウザの <video> がそのまま再生できる拡張子。
+// これ以外の動画は再生時に ffmpeg でトランスコードして配信する。
+var browserNativeVideo = map[string]bool{
+	".mp4": true, ".m4v": true, ".webm": true, ".ogg": true, ".ogv": true, ".mov": true,
+}
+
 // IsImage / IsVideo は拡張子から判定する。
 func (l *Library) IsImage(name string) bool { return l.imageExts[strings.ToLower(filepath.Ext(name))] }
 func (l *Library) IsVideo(name string) bool { return l.videoExts[strings.ToLower(filepath.Ext(name))] }
+
+// NeedsTranscode は、対象動画がブラウザ非対応形式で再生時に
+// トランスコードが必要かを返す（avi / wmv / mkv など）。
+func (l *Library) NeedsTranscode(name string) bool {
+	return l.IsVideo(name) && !browserNativeVideo[strings.ToLower(filepath.Ext(name))]
+}
 
 // Entry は一覧表示用のエントリ。
 type Entry struct {
 	Name    string `json:"name"`
 	RelPath string `json:"path"`
 	Kind    Kind   `json:"kind"`
+	// Transcode は動画再生時にトランスコードが必要な場合のみ true。
+	Transcode bool `json:"transcode,omitempty"`
 }
 
 // List は指定フォルダ直下のサブフォルダとメディアを返す（遅延読込）。
@@ -109,9 +123,10 @@ func (l *Library) List(relPath string) ([]Entry, error) {
 			continue
 		}
 		entries = append(entries, Entry{
-			Name:    name,
-			RelPath: path.Join(clean, name),
-			Kind:    kind,
+			Name:      name,
+			RelPath:   path.Join(clean, name),
+			Kind:      kind,
+			Transcode: kind == KindVideo && l.NeedsTranscode(name),
 		})
 	}
 	sortEntries(entries)

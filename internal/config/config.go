@@ -76,7 +76,9 @@ func (c *Config) applyDefaults() {
 		c.Extensions.Image = []string{"jpg", "jpeg", "png", "gif", "webp"}
 	}
 	if len(c.Extensions.Video) == 0 {
-		c.Extensions.Video = []string{"mp4", "m4v", "webm"}
+		// mp4/m4v/webm はブラウザがそのまま再生。avi/wmv/mkv/mov/flv 等は
+		// 非対応コーデックが多いため、再生時に ffmpeg で都度トランスコードする。
+		c.Extensions.Video = []string{"mp4", "m4v", "webm", "mov", "avi", "wmv", "mkv", "flv"}
 	}
 }
 

@@ -252,24 +252,44 @@ PY
 install_systemd_service() {
   local unit="/etc/systemd/system/mediavault.service"
   local user; user="$(id -un)"
+
+  # config.yaml から media_root を読み取り、その下の HDD などのマウントを
+  # 待ってから起動するよう RequiresMountsFor を付ける（起動時のマウント遅延対策）。
+  local media_root=""
+  if [ -f "config.yaml" ]; then
+    media_root="$(awk -F: '/^[[:space:]]*media_root[[:space:]]*:/ {sub(/^[^:]*:[[:space:]]*/, ""); gsub(/^["'"'"']|["'"'"'][[:space:]]*$/, ""); print; exit}' config.yaml)"
+  fi
+  local mount_line=""
+  if [ -n "$media_root" ]; then
+    mount_line="RequiresMountsFor=$media_root"
+  fi
+
   c_info "systemd サービスを作成します: $unit"
   as_root tee "$unit" >/dev/null <<EOF
 [Unit]
 Description=MediaVault
-After=network.target
+# ネットワークと（外付けHDD等の）メディアフォルダのマウント完了後に起動する。
+After=network-online.target
+Wants=network-online.target
+$mount_line
+# 起動時にHDDのマウントが遅れても、回数制限で諦めず再試行し続ける。
+StartLimitIntervalSec=0
 
 [Service]
 WorkingDirectory=$REPO_DIR
 ExecStart=$REPO_DIR/$BINARY_NAME serve -config $REPO_DIR/config.yaml
 Restart=on-failure
+RestartSec=5
 User=$user
 
 [Install]
 WantedBy=multi-user.target
 EOF
   as_root systemctl daemon-reload
+  # enable で「ラズパイ起動時に自動起動」、--now で即時起動。
   as_root systemctl enable --now mediavault
-  c_ok "mediavault サービスを有効化・起動しました（systemctl status mediavault で確認）。"
+  c_ok "mediavault サービスを有効化・起動しました（ラズパイ起動時に自動で立ち上がります）。"
+  c_ok "状態確認: systemctl status mediavault"
 }
 
 # ---- 自動デプロイ（main 監視 → pull/build/restart）の systemd timer ----

@@ -230,6 +230,7 @@ button { font: inherit; cursor: pointer; }
 .player-bar { display: flex; align-items: center; gap: 8px; padding: 8px 12px; }
 .player-bar span { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .player video { width: 100%; max-height: 80vh; background: #000; display: block; }
+.player-note { margin: 0; padding: 6px 12px; font-size: 12px; color: var(--muted); }
 
 /* ---- レスポンシブ ---- */
 @media (max-width: 720px) {

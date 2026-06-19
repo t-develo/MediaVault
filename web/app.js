@@ -88,18 +88,32 @@ function bindEvents() {
   document.addEventListener("keydown", onKey);
   window.addEventListener("popstate", onPopState);
 
-  // スワイプ（ビューア）: 横=ページ送り（右綴じ） / 下=閉じる
-  let sx = 0, sy = 0;
+  // スワイプ（ビューア）:
+  //   画面中央の横スワイプ = ページ送り（右綴じ） / 下スワイプ = 閉じる
+  //   画面左端からの右スワイプ = 戻る（閉じる）
+  // 「戻る」は画面端からの操作のみに限定し、中央のページめくりと被らないようにする。
+  const EDGE_ZONE = 28;   // 画面端とみなす幅(px)。ここからの操作のみ「戻る」に割り当てる
+  const SWIPE_MIN = 60;   // ページめくりに必要な横移動量(px)。誤爆を防ぐためやや大きめ
+  const BACK_MIN = 60;    // 端からの「戻る」に必要な横移動量(px)
+  let sx = 0, sy = 0, fromLeftEdge = false, fromEdge = false;
   $("viewer").addEventListener("touchstart", (e) => {
     sx = e.touches[0].clientX;
     sy = e.touches[0].clientY;
+    fromLeftEdge = sx <= EDGE_ZONE;
+    fromEdge = fromLeftEdge || sx >= window.innerWidth - EDGE_ZONE;
   }, { passive: true });
   $("viewer").addEventListener("touchend", (e) => {
     const dx = e.changedTouches[0].clientX - sx;
     const dy = e.changedTouches[0].clientY - sy;
     if (Math.abs(dy) > Math.abs(dx)) {
       if (dy > 80) closeViewer();        // 下スワイプで閉じる
-    } else if (Math.abs(dx) > 50) {
+      return;
+    }
+    // 左端から右へスワイプ = 戻る（閉じる）
+    if (fromLeftEdge && dx > BACK_MIN) { closeViewer(); return; }
+    // 画面端からの横スワイプはページめくりに使わない（戻る操作との被りを防ぐ）
+    if (fromEdge) return;
+    if (Math.abs(dx) > SWIPE_MIN) {
       stepViewer(dx > 0 ? 1 : -1);       // 右スワイプ=次 / 左スワイプ=前
     }
   }, { passive: true });
@@ -369,8 +383,18 @@ function openPlayer(e, push = true) {
   $("player").dataset.path = e.path;
   $("player-title").textContent = e.name;
   $("player-fav").textContent = favSet.has(e.path) ? "★" : "☆";
+  const note = $("player-note");
   const v = $("player-video");
-  v.src = "/api/media?path=" + enc(e.path);
+  if (e.transcode) {
+    // avi/wmv 等のブラウザ非対応形式: サーバ側で ffmpeg 変換して配信。
+    // ライブ変換のためシーク不可（先頭から順次再生）。
+    v.src = "/api/transcode?path=" + enc(e.path);
+    note.textContent = "変換再生中（シーク不可・ffmpeg 必要）";
+    note.classList.remove("hidden");
+  } else {
+    v.src = "/api/media?path=" + enc(e.path);
+    note.classList.add("hidden");
+  }
   v.play().catch(() => {});
   if (push) history.pushState({ view: "player", path: e.path }, "");
 }

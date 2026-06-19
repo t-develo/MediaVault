@@ -47,6 +47,9 @@ func NewGenerator(cacheDir string, concurrency int) (*Generator, error) {
 // HasFFmpeg は動画サムネが利用可能かを返す。
 func (g *Generator) HasFFmpeg() bool { return g.ffmpegPath != "" }
 
+// FFmpegPath は検出した ffmpeg の実行パスを返す（無ければ空文字）。
+func (g *Generator) FFmpegPath() string { return g.ffmpegPath }
+
 // cacheKey は絶対パスと更新時刻からキャッシュファイル名を作る。
 func (g *Generator) cachePath(absPath string, modTime time.Time) string {
 	h := sha256.Sum256([]byte(absPath + "|" + strconv.FormatInt(modTime.UnixNano(), 10)))

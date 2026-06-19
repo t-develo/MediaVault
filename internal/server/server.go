@@ -50,6 +50,7 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/images", s.requireAuth(http.HandlerFunc(s.handleImages)))
 	mux.Handle("GET /api/thumb", s.requireAuth(http.HandlerFunc(s.handleThumb)))
 	mux.Handle("GET /api/media", s.requireAuth(http.HandlerFunc(s.handleMedia)))
+	mux.Handle("GET /api/transcode", s.requireAuth(http.HandlerFunc(s.handleTranscode)))
 	mux.Handle("GET /api/search", s.requireAuth(http.HandlerFunc(s.handleSearch)))
 	mux.Handle("GET /api/favorites", s.requireAuth(http.HandlerFunc(s.handleListFavorites)))
 	mux.Handle("POST /api/favorites", s.requireAuth(http.HandlerFunc(s.handleAddFavorite)))
