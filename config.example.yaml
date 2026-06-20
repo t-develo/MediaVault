@@ -31,6 +31,9 @@ ipblock:
   block_minutes: 15  # ブロック継続時間（分）
 
 # 対象とする拡張子。
+# 動画のうち mp4 / m4v / webm / mov(H.264) はブラウザがそのまま再生します。
+# avi / wmv / mkv / flv などブラウザ非対応の形式は、再生時に ffmpeg で
+# H.264/AAC へ都度トランスコードして配信します（ffmpeg が必要）。
 extensions:
   image: [jpg, jpeg, png, gif, webp]
-  video: [mp4, m4v, webm]
+  video: [mp4, m4v, webm, mov, avi, wmv, mkv, flv]
