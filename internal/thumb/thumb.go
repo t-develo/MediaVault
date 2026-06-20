@@ -99,25 +99,29 @@ func (g *Generator) imageThumb(src, dst string) error {
 }
 
 func (g *Generator) videoThumb(src, dst string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	// 動画の最初の方の代表フレームを1枚抽出して縮小
-	args := []string{
-		"-ss", "3", "-i", src,
-		"-frames:v", "1",
-		"-vf", fmt.Sprintf("scale=%d:-1:force_original_aspect_ratio=decrease", maxDim),
-		"-y", dst,
-	}
-	cmd := exec.CommandContext(ctx, g.ffmpegPath, args...)
-	if err := cmd.Run(); err != nil {
-		// 短い動画では -ss 3 が範囲外のことがあるため先頭フレームで再試行
-		args[1] = "0"
-		cmd = exec.CommandContext(ctx, g.ffmpegPath, args...)
-		if err2 := cmd.Run(); err2 != nil {
-			return fmt.Errorf("ffmpegサムネ生成に失敗: %w", err2)
+	// ffmpeg の出力は一旦 tmp に書き、非空を確認できた時のみ rename で確定する。
+	// avi/wmv 等で抽出が失敗・部分出力になっても、壊れたファイルをキャッシュに残さない。
+	tmp := dst + ".tmp"
+	defer os.Remove(tmp)
+
+	// まず3秒地点の代表フレーム、ダメなら先頭フレームで再試行（短い動画対策）。
+	for _, ss := range []string{"3", "0"} {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		args := []string{
+			"-ss", ss, "-i", src,
+			"-frames:v", "1", "-an",
+			"-vf", fmt.Sprintf("scale=%d:-1:force_original_aspect_ratio=decrease", maxDim),
+			"-y", tmp,
+		}
+		err := exec.CommandContext(ctx, g.ffmpegPath, args...).Run()
+		cancel()
+		if err == nil {
+			if fi, e := os.Stat(tmp); e == nil && fi.Size() > 0 {
+				return os.Rename(tmp, dst) // アトミックに確定
+			}
 		}
 	}
-	return nil
+	return fmt.Errorf("ffmpegサムネ生成に失敗")
 }
 
 func writeThumb(img image.Image, dst string) error {
