@@ -34,6 +34,8 @@ ipblock:
 # 動画のうち mp4 / m4v / webm / mov(H.264) はブラウザがそのまま再生します。
 # avi / wmv / mkv / flv などブラウザ非対応の形式は、再生時に ffmpeg で
 # H.264/AAC へ都度トランスコードして配信します（ffmpeg が必要）。
+# ここでの指定は組み込みの標準拡張子に「追加」する形で働きます（標準分は常に有効）。
+# 古い設定ファイルでも、対応形式が増えれば自動で認識されます。独自の形式だけ書けば十分です。
 extensions:
   image: [jpg, jpeg, png, gif, webp]
   video: [mp4, m4v, webm, mov, avi, wmv, mkv, flv]

@@ -4,8 +4,18 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"gopkg.in/yaml.v3"
+)
+
+// 組み込みの標準拡張子。config.yaml の extensions はこれらに「追加する」形で働く。
+// （古い config.yaml でも、コードで対応形式を増やせば自動的に認識されるようにするため）
+var (
+	defaultImageExts = []string{"jpg", "jpeg", "png", "gif", "webp"}
+	// mp4/m4v/webm/mov はブラウザがそのまま再生。avi/wmv/mkv/flv 等は
+	// 非対応コーデックが多いため、再生時に ffmpeg で都度トランスコードする。
+	defaultVideoExts = []string{"mp4", "m4v", "webm", "mov", "avi", "wmv", "mkv", "flv"}
 )
 
 // Config は config.yaml の内容を表す。
@@ -72,14 +82,30 @@ func (c *Config) applyDefaults() {
 	if c.IPBlock.BlockMinutes <= 0 {
 		c.IPBlock.BlockMinutes = 15
 	}
-	if len(c.Extensions.Image) == 0 {
-		c.Extensions.Image = []string{"jpg", "jpeg", "png", "gif", "webp"}
+	// 標準拡張子は常に含める（ユーザー追加分は維持、重複は排除・順序は標準が先）。
+	// これにより既存の config.yaml を編集しなくても、対応形式の追加が反映される。
+	c.Extensions.Image = unionExts(defaultImageExts, c.Extensions.Image)
+	c.Extensions.Video = unionExts(defaultVideoExts, c.Extensions.Video)
+}
+
+// unionExts は base と extra を結合する。小文字・先頭ドット無しで正規化して
+// 重複を排除し、base を先、extra の追加分を後ろに並べる。
+func unionExts(base, extra []string) []string {
+	seen := make(map[string]bool)
+	out := make([]string, 0, len(base)+len(extra))
+	add := func(exts []string) {
+		for _, e := range exts {
+			norm := strings.ToLower(strings.TrimPrefix(strings.TrimSpace(e), "."))
+			if norm == "" || seen[norm] {
+				continue
+			}
+			seen[norm] = true
+			out = append(out, norm)
+		}
 	}
-	if len(c.Extensions.Video) == 0 {
-		// mp4/m4v/webm はブラウザがそのまま再生。avi/wmv/mkv/mov/flv 等は
-		// 非対応コーデックが多いため、再生時に ffmpeg で都度トランスコードする。
-		c.Extensions.Video = []string{"mp4", "m4v", "webm", "mov", "avi", "wmv", "mkv", "flv"}
-	}
+	add(base)
+	add(extra)
+	return out
 }
 
 func (c *Config) validate() error {
