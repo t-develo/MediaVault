@@ -32,10 +32,18 @@ ipblock:
 
 # 対象とする拡張子。
 # 動画のうち mp4 / m4v / webm / mov(H.264) はブラウザがそのまま再生します。
-# avi / wmv / mkv / flv などブラウザ非対応の形式は、再生時に ffmpeg で
-# H.264/AAC へ都度トランスコードして配信します（ffmpeg が必要）。
+# avi / wmv / mkv / flv などブラウザ非対応の形式は、ffmpeg で H.264/AAC の MP4 へ
+# 事前変換してキャッシュし、以後はシーク可能な Range 配信で再生します（ffmpeg が必要）。
 # ここでの指定は組み込みの標準拡張子に「追加」する形で働きます（標準分は常に有効）。
 # 古い設定ファイルでも、対応形式が増えれば自動で認識されます。独自の形式だけ書けば十分です。
 extensions:
   image: [jpg, jpeg, png, gif, webp]
   video: [mp4, m4v, webm, mov, avi, wmv, mkv, flv]
+
+# avi / wmv 等の事前変換キャッシュの設定（すべて任意。未指定なら下記の既定値）。
+convert:
+  preconvert: true     # 起動後にライブラリを走査して対象動画を事前変換する
+  concurrency: 1       # 同時変換数（ラズパイ配慮で控えめに）
+  max_cache_mb: 4096   # 変換キャッシュの上限(MB)。超過すると古いものから自動削除。0以下で無制限
+  width: 1280          # 変換時の最大横幅(px)
+  preset: veryfast     # x264 プリセット（速度↔画質/サイズ）

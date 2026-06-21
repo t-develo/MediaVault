@@ -385,18 +385,56 @@ function openPlayer(e, push = true) {
   $("player-fav").textContent = favSet.has(e.path) ? "★" : "☆";
   const note = $("player-note");
   const v = $("player-video");
+  v.removeAttribute("src"); v.load();
   if (e.transcode) {
-    // avi/wmv 等のブラウザ非対応形式: サーバ側で ffmpeg 変換して配信。
-    // ライブ変換のためシーク不可（先頭から順次再生）。
-    v.src = "/api/transcode?path=" + enc(e.path);
-    note.textContent = "変換再生中（シーク不可・ffmpeg 必要）";
+    // avi/wmv 等のブラウザ非対応形式: サーバ側で ffmpeg が事前変換した
+    // シーク可能な MP4 を配信する。未変換なら変換完了まで進捗を表示して待つ。
+    note.textContent = "変換中… 0%";
     note.classList.remove("hidden");
+    waitForConversion(e.path);
   } else {
     v.src = "/api/media?path=" + enc(e.path);
     note.classList.add("hidden");
+    v.play().catch(() => {});
   }
-  v.play().catch(() => {});
   if (push) history.pushState({ view: "player", path: e.path }, "");
+}
+
+// waitForConversion は /api/convert をポーリングして変換完了を待ち、
+// 完了したらシーク可能なキャッシュを再生する。プレーヤーが閉じられた／別動画に
+// 切り替わった場合は dataset.path の不一致で自動的に停止する。
+async function waitForConversion(path) {
+  const note = $("player-note");
+  const v = $("player-video");
+  while ($("player").dataset.path === path) {
+    let st;
+    try {
+      st = await api.get("/api/convert?path=" + enc(path));
+    } catch (err) {
+      if ($("player").dataset.path !== path) return;
+      note.textContent = "変換状態の取得に失敗しました";
+      return;
+    }
+    if ($("player").dataset.path !== path) return; // 待機中に切替/クローズ
+    if (st.state === "ready") {
+      v.src = "/api/converted?path=" + enc(path);
+      note.classList.add("hidden");
+      v.play().catch(() => {});
+      return;
+    }
+    if (st.state === "failed") {
+      note.textContent = st.message || "変換に失敗しました";
+      return;
+    }
+    if (st.state === "converting") {
+      note.textContent = st.progress >= 0
+        ? "変換中… " + Math.floor(st.progress) + "%"
+        : "変換中…";
+    } else {
+      note.textContent = "変換待ち…";
+    }
+    await new Promise((r) => setTimeout(r, 1500));
+  }
 }
 
 // ユーザー操作（✕ / Escape）: 履歴を戻して popstate で閉じる
@@ -407,6 +445,8 @@ function closePlayer() {
 function hidePlayer() {
   const v = $("player-video");
   v.pause(); v.removeAttribute("src"); v.load();
+  // 変換待ちポーリングを止めるため path をクリアする。
+  delete $("player").dataset.path;
   $("player").classList.add("hidden");
 }
 

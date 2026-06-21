@@ -12,6 +12,7 @@ import (
 
 	"github.com/t-develo/mediavault/internal/auth"
 	"github.com/t-develo/mediavault/internal/config"
+	"github.com/t-develo/mediavault/internal/convert"
 	"github.com/t-develo/mediavault/internal/media"
 	"github.com/t-develo/mediavault/internal/server"
 	"github.com/t-develo/mediavault/internal/store"
@@ -81,7 +82,25 @@ func runServe(args []string) {
 		fatal(err)
 	}
 
-	srv := server.New(cfg, st, au, lib, tg)
+	// avi/wmv 等を H.264/AAC の MP4 へ事前変換しキャッシュする変換器。
+	cv, err := convert.NewConverter(cfg.CacheDir, convert.Options{
+		Concurrency: cfg.Convert.Concurrency,
+		MaxBytes:    int64(cfg.Convert.MaxCacheMB) * 1024 * 1024,
+		Width:       cfg.Convert.Width,
+		Preset:      cfg.Convert.Preset,
+	})
+	if err != nil {
+		fatal(err)
+	}
+	cv.Start()
+	// 事前変換スイープ（低優先）: 起動後にライブラリを走査して順次変換する。
+	if cfg.Convert.PreconvertEnabled() && cv.HasFFmpeg() {
+		go func() {
+			_ = lib.WalkVideosNeedingTranscode(cv.Enqueue)
+		}()
+	}
+
+	srv := server.New(cfg, st, au, lib, tg, cv)
 	srv.StartSessionGC()
 
 	httpSrv := &http.Server{
@@ -92,7 +111,7 @@ func runServe(args []string) {
 
 	fmt.Printf("MediaVault 起動: http://%s （メディア: %s）\n", cfg.Listen, cfg.MediaRoot)
 	if !tg.HasFFmpeg() {
-		fmt.Println("注意: ffmpeg が見つかりません。動画サムネは生成されません（apt install ffmpeg を推奨）。")
+		fmt.Println("注意: ffmpeg が見つかりません。動画サムネ生成と avi/wmv 等の変換再生は無効です（apt install ffmpeg を推奨）。")
 	}
 	if err := httpSrv.ListenAndServe(); err != nil {
 		fatal(err)

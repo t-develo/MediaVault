@@ -8,6 +8,7 @@ import (
 
 	"github.com/t-develo/mediavault/internal/auth"
 	"github.com/t-develo/mediavault/internal/config"
+	"github.com/t-develo/mediavault/internal/convert"
 	"github.com/t-develo/mediavault/internal/media"
 	"github.com/t-develo/mediavault/internal/store"
 	"github.com/t-develo/mediavault/internal/thumb"
@@ -23,10 +24,11 @@ type Server struct {
 	store *store.Store
 	lib   *media.Library
 	thumb *thumb.Generator
+	conv  *convert.Converter
 }
 
-func New(cfg *config.Config, st *store.Store, au *auth.Authenticator, lib *media.Library, tg *thumb.Generator) *Server {
-	return &Server{cfg: cfg, auth: au, store: st, lib: lib, thumb: tg}
+func New(cfg *config.Config, st *store.Store, au *auth.Authenticator, lib *media.Library, tg *thumb.Generator, cv *convert.Converter) *Server {
+	return &Server{cfg: cfg, auth: au, store: st, lib: lib, thumb: tg, conv: cv}
 }
 
 // Handler は全ルートを登録した http.Handler を返す。
@@ -50,7 +52,8 @@ func (s *Server) Handler() http.Handler {
 	mux.Handle("GET /api/images", s.requireAuth(http.HandlerFunc(s.handleImages)))
 	mux.Handle("GET /api/thumb", s.requireAuth(http.HandlerFunc(s.handleThumb)))
 	mux.Handle("GET /api/media", s.requireAuth(http.HandlerFunc(s.handleMedia)))
-	mux.Handle("GET /api/transcode", s.requireAuth(http.HandlerFunc(s.handleTranscode)))
+	mux.Handle("GET /api/convert", s.requireAuth(http.HandlerFunc(s.handleConvertStatus)))
+	mux.Handle("GET /api/converted", s.requireAuth(http.HandlerFunc(s.handleConverted)))
 	mux.Handle("GET /api/search", s.requireAuth(http.HandlerFunc(s.handleSearch)))
 	mux.Handle("GET /api/favorites", s.requireAuth(http.HandlerFunc(s.handleListFavorites)))
 	mux.Handle("POST /api/favorites", s.requireAuth(http.HandlerFunc(s.handleAddFavorite)))

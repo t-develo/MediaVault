@@ -29,6 +29,7 @@ type Config struct {
 	Auth      AuthConfig     `yaml:"auth"`
 	IPBlock   IPBlockConfig  `yaml:"ipblock"`
 	Extensions ExtConfig     `yaml:"extensions"`
+	Convert   ConvertConfig  `yaml:"convert"`
 }
 
 type AuthConfig struct {
@@ -44,6 +45,22 @@ type IPBlockConfig struct {
 type ExtConfig struct {
 	Image []string `yaml:"image"`
 	Video []string `yaml:"video"`
+}
+
+// ConvertConfig は avi/wmv 等の事前変換キャッシュの挙動を制御する。
+type ConvertConfig struct {
+	// Preconvert は起動後にライブラリを走査して対象動画を事前変換するか。
+	// 既定 true。明示的に無効化したい場合のみ false を設定する。
+	Preconvert *bool  `yaml:"preconvert"`
+	Concurrency int   `yaml:"concurrency"`  // 同時変換数（既定 1）
+	MaxCacheMB  int   `yaml:"max_cache_mb"` // 変換キャッシュ上限MB（既定 4096、0以下で無制限）
+	Width       int   `yaml:"width"`        // 変換時の最大横幅（既定 1280）
+	Preset      string `yaml:"preset"`      // x264 プリセット（既定 veryfast）
+}
+
+// PreconvertEnabled は Preconvert の既定（true）を適用して返す。
+func (c ConvertConfig) PreconvertEnabled() bool {
+	return c.Preconvert == nil || *c.Preconvert
 }
 
 // Load は指定パスの設定を読み込み、デフォルト補完と検証を行う。
@@ -86,6 +103,19 @@ func (c *Config) applyDefaults() {
 	// これにより既存の config.yaml を編集しなくても、対応形式の追加が反映される。
 	c.Extensions.Image = unionExts(defaultImageExts, c.Extensions.Image)
 	c.Extensions.Video = unionExts(defaultVideoExts, c.Extensions.Video)
+
+	if c.Convert.Concurrency <= 0 {
+		c.Convert.Concurrency = 1
+	}
+	if c.Convert.MaxCacheMB == 0 {
+		c.Convert.MaxCacheMB = 4096
+	}
+	if c.Convert.Width <= 0 {
+		c.Convert.Width = 1280
+	}
+	if c.Convert.Preset == "" {
+		c.Convert.Preset = "veryfast"
+	}
 }
 
 // unionExts は base と extra を結合する。小文字・先頭ドット無しで正規化して

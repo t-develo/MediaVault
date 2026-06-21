@@ -55,3 +55,27 @@ func (l *Library) Search(query string, limit int) ([]SearchResult, error) {
 	})
 	return results, err
 }
+
+// WalkVideosNeedingTranscode はルート配下を再帰走査し、トランスコードが必要な
+// 動画（avi/wmv/mkv など）の絶対パスごとに fn を呼ぶ。事前変換スイープ用。
+func (l *Library) WalkVideosNeedingTranscode(fn func(abs string)) error {
+	return filepath.WalkDir(l.root, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil // アクセスできない箇所はスキップ
+		}
+		name := d.Name()
+		if strings.HasPrefix(name, ".") {
+			if d.IsDir() {
+				return fs.SkipDir
+			}
+			return nil
+		}
+		if d.IsDir() {
+			return nil
+		}
+		if l.NeedsTranscode(name) {
+			fn(p)
+		}
+		return nil
+	})
+}
