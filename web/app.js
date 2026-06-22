@@ -41,7 +41,7 @@ async function init() {
   try {
     await api.get("/api/me");
     showApp();
-    await Promise.all([loadFavorites(), loadTree()]);
+    await Promise.all([loadFavorites(), loadTree(), loadHistory()]);
     history.replaceState({ view: "dir", path: "/" }, "");
     await navigate("/", false);
   } catch {
@@ -80,6 +80,11 @@ function bindEvents() {
   $("viewer-prev").addEventListener("click", () => stepViewer(1));
   $("viewer-next").addEventListener("click", () => stepViewer(-1));
   $("viewer-fav").addEventListener("click", () => toggleFavByPath(viewerImages[viewerIndex]?.path, "file", $("viewer-fav")));
+  // ページ送りシークバー: ドラッグで任意ページへジャンプ
+  $("viewer-seek").addEventListener("input", (e) => {
+    const i = parseInt(e.target.value, 10);
+    if (i >= 0 && i < viewerImages.length) { viewerIndex = i; showViewerImage(); }
+  });
 
   // 動画
   $("player-close").addEventListener("click", closePlayer);
@@ -141,7 +146,7 @@ async function onLogin(e) {
   if (r.ok) {
     $("login-pass").value = "";
     showApp();
-    await Promise.all([loadFavorites(), loadTree()]);
+    await Promise.all([loadFavorites(), loadTree(), loadHistory()]);
     history.replaceState({ view: "dir", path: "/" }, "");
     await navigate("/", false);
   } else {
@@ -175,6 +180,8 @@ async function navigate(path, push = true) {
   } finally {
     hideLoading();
   }
+  // 移動のたびにサイドバーの履歴を更新（記録はサーバ側 /api/list で行う）
+  loadHistory();
 }
 
 // 前の巻/次の巻ナビ: 画像を含む巻フォルダのみ、同じ親フォルダ内の隣を辿る
@@ -338,6 +345,11 @@ function showViewerImage() {
   $("viewer-title").textContent = e.name;
   $("viewer-counter").textContent = `${viewerIndex + 1} / ${viewerImages.length}`;
   $("viewer-fav").textContent = favSet.has(e.path) ? "★" : "☆";
+  // シークバー同期（1枚以下なら下部バーを隠す）
+  const seek = $("viewer-seek");
+  seek.max = Math.max(0, viewerImages.length - 1);
+  seek.value = viewerIndex;
+  $("viewer-foot").classList.toggle("hidden", viewerImages.length <= 1);
   preload(viewerIndex + 1);
   preload(viewerIndex - 1);
 }
@@ -449,6 +461,30 @@ async function loadFavorites() {
       if (f.kind === "folder") navigate(f.path);
       else openFileByPath(f);
     };
+    li.appendChild(node);
+    ul.appendChild(li);
+  }
+}
+
+// ===== 履歴（最近見たフォルダ） =====
+async function loadHistory() {
+  let items;
+  try {
+    const data = await api.get("/api/history");
+    items = data.history || [];
+  } catch {
+    return; // 履歴取得の失敗は致命的ではない
+  }
+  const ul = $("history-list");
+  ul.innerHTML = "";
+  for (const h of items) {
+    const li = document.createElement("li");
+    const node = document.createElement("div");
+    node.className = "node";
+    const name = h.path.split("/").filter(Boolean).pop() || "/";
+    node.textContent = "📁 " + name;
+    node.title = h.path;
+    node.onclick = () => navigate(h.path);
     li.appendChild(node);
     ul.appendChild(li);
   }

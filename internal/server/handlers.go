@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"os"
+	"path"
 	"strings"
 	"time"
 
@@ -59,8 +60,8 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
-		"username":  s.cfg.Auth.Username,
-		"ffmpeg":    s.thumb.HasFFmpeg(),
+		"username": s.cfg.Auth.Username,
+		"ffmpeg":   s.thumb.HasFFmpeg(),
 	})
 }
 
@@ -82,7 +83,24 @@ func (s *Server) handleList(w http.ResponseWriter, r *http.Request) {
 	for _, e := range entries {
 		out = append(out, item{Entry: e, Favorite: favSet[e.RelPath]})
 	}
+	// フォルダ閲覧履歴を記録（ルートと除外指定フォルダ配下は対象外）
+	clean := path.Clean("/" + strings.TrimPrefix(p, "/"))
+	if clean != "/" && !s.cfg.IsHistoryExcluded(clean) {
+		_ = s.store.AddHistory(clean)
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"path": p, "entries": out})
+}
+
+func (s *Server) handleListHistory(w http.ResponseWriter, r *http.Request) {
+	hist, err := s.store.ListHistory(15)
+	if err != nil {
+		http.Error(w, "取得に失敗しました", http.StatusInternalServerError)
+		return
+	}
+	if hist == nil {
+		hist = []store.HistoryEntry{} // null ではなく [] を返す
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"history": hist})
 }
 
 func (s *Server) handleTree(w http.ResponseWriter, r *http.Request) {

@@ -31,6 +31,10 @@ CREATE TABLE IF NOT EXISTS login_attempts (
   last_attempt_at INTEGER NOT NULL,
   blocked_until INTEGER NOT NULL DEFAULT 0
 );
+CREATE TABLE IF NOT EXISTS history (
+  rel_path TEXT PRIMARY KEY,
+  viewed_at INTEGER NOT NULL
+);
 `
 
 // Open はデータベースを開き（無ければ作成し）スキーマを適用する。
@@ -159,6 +163,42 @@ func (s *Store) ListFavorites() ([]Favorite, error) {
 		favs = append(favs, f)
 	}
 	return favs, rows.Err()
+}
+
+// ----- 履歴（最近見たフォルダ） -----
+
+type HistoryEntry struct {
+	RelPath  string `json:"path"`
+	ViewedAt int64  `json:"viewed_at"`
+}
+
+// AddHistory はフォルダの閲覧履歴を記録する（既存なら閲覧時刻を更新）。
+func (s *Store) AddHistory(relPath string) error {
+	_, err := s.db.Exec(`
+		INSERT INTO history(rel_path, viewed_at) VALUES(?,?)
+		ON CONFLICT(rel_path) DO UPDATE SET viewed_at=excluded.viewed_at
+	`, relPath, time.Now().Unix())
+	return err
+}
+
+// ListHistory は最近見たフォルダを新しい順に最大 limit 件返す。
+func (s *Store) ListHistory(limit int) ([]HistoryEntry, error) {
+	rows, err := s.db.Query(
+		"SELECT rel_path, viewed_at FROM history ORDER BY viewed_at DESC LIMIT ?", limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var hist []HistoryEntry
+	for rows.Next() {
+		var h HistoryEntry
+		if err := rows.Scan(&h.RelPath, &h.ViewedAt); err != nil {
+			return nil, err
+		}
+		hist = append(hist, h)
+	}
+	return hist, rows.Err()
 }
 
 // FavoriteSet は指定パス集合のうちお気に入り登録済みのものを返す。

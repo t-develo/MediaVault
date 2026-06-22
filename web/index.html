@@ -36,6 +36,10 @@
           <ul id="fav-list" class="fav-list"></ul>
         </div>
         <div class="side-section">
+          <h2>🕒 履歴</h2>
+          <ul id="history-list" class="fav-list"></ul>
+        </div>
+        <div class="side-section">
           <h2>📂 ライブラリ</h2>
           <ul id="tree" class="tree"></ul>
         </div>
@@ -74,12 +78,18 @@
       <button id="viewer-fav" class="icon-btn">☆</button>
     </div>
     <div class="viewer-stage">
-      <div id="viewer-prev" class="nav-zone left">›</div>
-      <img id="viewer-img" alt="">
-      <div id="viewer-spinner" class="spinner hidden"></div>
-      <div id="viewer-next" class="nav-zone right">‹</div>
+      <!-- 右綴じ: 左=次 / 右=前。スマホでは CSS で非表示（スワイプで操作）。 -->
+      <button id="viewer-prev" class="nav-arrow" type="button">&gt;</button>
+      <div class="viewer-img-wrap">
+        <img id="viewer-img" alt="">
+        <div id="viewer-spinner" class="spinner hidden"></div>
+      </div>
+      <button id="viewer-next" class="nav-arrow" type="button">&lt;</button>
     </div>
-    <div id="viewer-counter" class="viewer-counter"></div>
+    <div class="viewer-foot">
+      <input id="viewer-seek" class="viewer-seek" type="range" min="0" max="0" value="0">
+      <div id="viewer-counter" class="viewer-counter"></div>
+    </div>
   </div>
 
   <!-- 動画モーダル -->
