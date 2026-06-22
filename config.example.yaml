@@ -39,3 +39,9 @@ ipblock:
 extensions:
   image: [jpg, jpeg, png, gif, webp]
   video: [mp4, m4v, webm, mov, avi, wmv, mkv, flv]
+
+# 閲覧履歴（サイドバーの「履歴」）に残さないフォルダ。
+# 指定したパスと、その配下のサブフォルダ・ファイルもすべて履歴から除外されます。
+# 例: 非公開フォルダを履歴に出したくない場合などに指定します。
+history_exclude:
+  - "/private"

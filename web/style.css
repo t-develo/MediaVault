@@ -194,20 +194,34 @@ button { font: inherit; cursor: pointer; }
   padding: 8px 12px; color: #fff; background: rgba(0,0,0,.5);
   position: absolute; top: 0; left: 0; right: 0; z-index: 2;
 }
-.viewer-stage { flex: 1; position: relative; display: grid; place-items: center; }
-.viewer-stage img { max-width: 100%; max-height: 100%; object-fit: contain; }
-.nav-zone {
-  position: absolute; top: 0; bottom: 0; width: 35%;
-  display: grid; place-items: center;
-  font-size: 48px; color: rgba(255,255,255,.4);
-  cursor: pointer; user-select: none;
+.viewer-stage { flex: 1; display: flex; align-items: center; min-height: 0; }
+.viewer-img-wrap {
+  flex: 1; height: 100%; position: relative;
+  display: grid; place-items: center; min-width: 0;
 }
-.nav-zone.left { left: 0; }
-.nav-zone.right { right: 0; }
-.nav-zone:hover { background: rgba(255,255,255,.06); color: #fff; }
+.viewer-stage img { max-width: 100%; max-height: 100%; object-fit: contain; }
+/* PC: 画像の外（左右の余白）に矢印を表示。スマホでは非表示にしスワイプで操作。 */
+.nav-arrow {
+  flex: 0 0 auto; width: 72px; height: 100%;
+  background: transparent; border: none;
+  color: rgba(255,255,255,.5); font-size: 48px; user-select: none;
+}
+.nav-arrow:hover { color: #fff; background: rgba(255,255,255,.06); }
+/* ページ送りシークバー（画面下部） */
+.viewer-foot {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 2;
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: 10px 16px;
+  background: linear-gradient(transparent, rgba(0,0,0,.5));
+}
+.viewer-seek {
+  width: min(640px, 90%);
+  direction: rtl;            /* 右綴じ: 値0=最初のページが右、左へドラッグで次ページ */
+  accent-color: var(--accent); cursor: pointer;
+}
 .viewer-counter {
-  position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%);
-  color: #fff; background: rgba(0,0,0,.5); padding: 4px 12px; border-radius: 999px; font-size: 14px;
+  color: #fff; background: rgba(0,0,0,.5);
+  padding: 4px 12px; border-radius: 999px; font-size: 14px;
 }
 
 /* ---- ロード中スピナー ---- */
@@ -243,6 +257,9 @@ button { font: inherit; cursor: pointer; }
   /* スマホは横2列固定・正方形サムネ。aspect-ratio で枠を先に確保しているため
      画像読み込みの前後でカード高さが変わらず、かくつかない（3行＝6個が画面内に収まる）。 */
   .grid { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+
+  /* スマホでは左右矢印を隠し、スワイプでページ送りする */
+  .nav-arrow { display: none; }
 
   .sidebar {
     position: absolute; top: 0; bottom: 0; left: 0; z-index: 40;

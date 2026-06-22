@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -20,15 +21,17 @@ var (
 
 // Config は config.yaml の内容を表す。
 type Config struct {
-	Listen    string         `yaml:"listen"`
-	MediaRoot string         `yaml:"media_root"`
-	CacheDir  string         `yaml:"cache_dir"`
-	DBPath    string         `yaml:"db_path"`
-	SessionTTLDays int       `yaml:"session_ttl_days"`
-	TrustProxy bool          `yaml:"trust_proxy"`
-	Auth      AuthConfig     `yaml:"auth"`
-	IPBlock   IPBlockConfig  `yaml:"ipblock"`
-	Extensions ExtConfig     `yaml:"extensions"`
+	Listen         string        `yaml:"listen"`
+	MediaRoot      string        `yaml:"media_root"`
+	CacheDir       string        `yaml:"cache_dir"`
+	DBPath         string        `yaml:"db_path"`
+	SessionTTLDays int           `yaml:"session_ttl_days"`
+	TrustProxy     bool          `yaml:"trust_proxy"`
+	Auth           AuthConfig    `yaml:"auth"`
+	IPBlock        IPBlockConfig `yaml:"ipblock"`
+	Extensions     ExtConfig     `yaml:"extensions"`
+	// HistoryExclude は閲覧履歴に残さないフォルダ。指定パスおよびその配下を除外する。
+	HistoryExclude []string `yaml:"history_exclude"`
 }
 
 type AuthConfig struct {
@@ -106,6 +109,21 @@ func unionExts(base, extra []string) []string {
 	add(base)
 	add(extra)
 	return out
+}
+
+// IsHistoryExcluded は relPath が history_exclude のいずれか、またはその配下なら true を返す。
+func (c *Config) IsHistoryExcluded(relPath string) bool {
+	target := path.Clean("/" + strings.TrimPrefix(relPath, "/"))
+	for _, ex := range c.HistoryExclude {
+		e := path.Clean("/" + strings.TrimPrefix(strings.TrimSpace(ex), "/"))
+		if e == "/" || e == "" {
+			continue
+		}
+		if target == e || strings.HasPrefix(target, e+"/") {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *Config) validate() error {
