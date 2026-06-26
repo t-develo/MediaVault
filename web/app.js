@@ -100,14 +100,24 @@ function bindEvents() {
   const EDGE_ZONE = 28;   // 画面端とみなす幅(px)。ここからの操作のみ「戻る」に割り当てる
   const SWIPE_MIN = 60;   // ページめくりに必要な横移動量(px)。誤爆を防ぐためやや大きめ
   const BACK_MIN = 60;    // 端からの「戻る」に必要な横移動量(px)
-  let sx = 0, sy = 0, fromLeftEdge = false, fromEdge = false;
+  let sx = 0, sy = 0, fromLeftEdge = false, fromEdge = false, multiTouch = false;
   $("viewer").addEventListener("touchstart", (e) => {
+    // 2本指以上（ピンチ等）はスワイプ判定の対象外。
+    // ピンチ縮小時の指の動きを下スワイプと誤検知して閉じてしまうのを防ぐ。
+    if (e.touches.length > 1) { multiTouch = true; return; }
+    multiTouch = false;
     sx = e.touches[0].clientX;
     sy = e.touches[0].clientY;
     fromLeftEdge = sx <= EDGE_ZONE;
     fromEdge = fromLeftEdge || sx >= window.innerWidth - EDGE_ZONE;
   }, { passive: true });
+  $("viewer").addEventListener("touchmove", (e) => {
+    // ジェスチャー途中で指が増えた場合もマルチタッチ扱いにする。
+    if (e.touches.length > 1) multiTouch = true;
+  }, { passive: true });
   $("viewer").addEventListener("touchend", (e) => {
+    // ピンチ等のマルチタッチ中はスワイプ判定をスキップ。指が全て離れたらリセット。
+    if (multiTouch) { if (e.touches.length === 0) multiTouch = false; return; }
     const dx = e.changedTouches[0].clientX - sx;
     const dy = e.changedTouches[0].clientY - sy;
     if (Math.abs(dy) > Math.abs(dx)) {
