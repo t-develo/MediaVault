@@ -30,6 +30,10 @@ let currentPath = "/";
 let currentEntries = [];   // 現在のフォルダのエントリ
 let viewerImages = [];     // 画像ビューアの対象一覧
 let viewerIndex = 0;
+// 画像ズーム状態（画像要素のみに効く独自ズーム。拡大中はページめくりを抑止する）
+let zoomScale = 1, zoomTX = 0, zoomTY = 0;   // 現在の拡大率・平行移動(px)
+const ZOOM_MAX = 4;        // 最大拡大率
+const ZOOM_DBL = 2.5;      // ダブルタップ時の拡大率
 let favSet = new Set();     // お気に入りパス集合
 let volNavCache = { parent: null, folders: [] }; // 巻ナビ: 親フォルダの兄弟一覧キャッシュ
 
@@ -118,6 +122,8 @@ function bindEvents() {
   $("viewer").addEventListener("touchend", (e) => {
     // ピンチ等のマルチタッチ中はスワイプ判定をスキップ。指が全て離れたらリセット。
     if (multiTouch) { if (e.touches.length === 0) multiTouch = false; return; }
+    // 拡大中は横移動＝画像のパン。ページめくり/閉じる/戻るは一切発火させない。
+    if (zoomScale > 1) return;
     const dx = e.changedTouches[0].clientX - sx;
     const dy = e.changedTouches[0].clientY - sy;
     if (Math.abs(dy) > Math.abs(dx)) {
@@ -132,6 +138,146 @@ function bindEvents() {
       stepViewer(dx > 0 ? 1 : -1);       // 右スワイプ=次 / 左スワイプ=前
     }
   }, { passive: true });
+
+  initImageZoom();
+}
+
+// ===== 画像ズーム（画像領域のみ・スマホのタッチ操作） =====
+// ピンチで拡大縮小、拡大中は1本指ドラッグでパン、ダブルタップで拡大/等倍をトグル。
+// 標準ズームは無効化済み（viewport / touch-action）なので、ここで独自に制御する。
+function applyZoom() {
+  const img = $("viewer-img");
+  img.style.transform = `translate(${zoomTX}px, ${zoomTY}px) scale(${zoomScale})`;
+}
+
+function resetZoom() {
+  zoomScale = 1; zoomTX = 0; zoomTY = 0;
+  applyZoom();
+}
+
+// 平行移動を画像がはみ出す範囲内に制限（拡大時のみ意味を持つ）
+function clampPan() {
+  const img = $("viewer-img");
+  const wrap = img.parentElement;
+  if (!wrap) return;
+  // 画像の描画サイズ（object-fit: contain 後の実サイズ）を基準にする
+  const baseW = img.clientWidth, baseH = img.clientHeight;
+  const maxX = Math.max(0, (baseW * zoomScale - wrap.clientWidth) / 2);
+  const maxY = Math.max(0, (baseH * zoomScale - wrap.clientHeight) / 2);
+  zoomTX = Math.min(maxX, Math.max(-maxX, zoomTX));
+  zoomTY = Math.min(maxY, Math.max(-maxY, zoomTY));
+}
+
+function initImageZoom() {
+  const wrap = $("viewer-img").parentElement; // .viewer-img-wrap
+  let pinchDist = 0, pinchScale = 1;           // ピンチ開始時の指間距離・拡大率
+  let pinchCX = 0, pinchCY = 0;                // ピンチ中点（wrap内座標）
+  let panX = 0, panY = 0, panTX = 0, panTY = 0; // パン開始時の指位置・移動量基準
+  let panning = false;
+  let lastTap = 0;                             // 直前のタップ時刻（ダブルタップ検出用）
+  // タップ判定: ジェスチャー中に大きく動いた/2本指になった場合はタップ扱いしない。
+  // （パンやピンチ終了時の指離しをダブルタップと誤検知して等倍に戻すのを防ぐ）
+  let tapStartX = 0, tapStartY = 0, tapValid = false;
+  const TAP_SLOP = 12;                         // タップとみなす許容移動量(px)
+
+  const centerIn = (t) => {
+    const r = wrap.getBoundingClientRect();
+    return { x: t.clientX - r.left - r.width / 2, y: t.clientY - r.top - r.height / 2 };
+  };
+  const dist = (a, b) => Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+
+  wrap.addEventListener("touchstart", (e) => {
+    if (e.touches.length === 2) {
+      // ピンチ開始
+      panning = false; tapValid = false;
+      pinchDist = dist(e.touches[0], e.touches[1]);
+      pinchScale = zoomScale;
+      const mid = { clientX: (e.touches[0].clientX + e.touches[1].clientX) / 2,
+                    clientY: (e.touches[0].clientY + e.touches[1].clientY) / 2 };
+      const c = centerIn(mid);
+      pinchCX = c.x; pinchCY = c.y;
+      e.preventDefault();
+    } else if (e.touches.length === 1) {
+      // 単発タップ候補として開始位置を記録（ダブルタップ検出用）
+      tapStartX = e.touches[0].clientX; tapStartY = e.touches[0].clientY;
+      tapValid = true;
+      if (zoomScale > 1) {
+        // 拡大中の1本指パン開始
+        panning = true;
+        panX = e.touches[0].clientX; panY = e.touches[0].clientY;
+        panTX = zoomTX; panTY = zoomTY;
+      }
+    }
+  }, { passive: false });
+
+  wrap.addEventListener("touchmove", (e) => {
+    if (e.touches.length === 2 && pinchDist > 0) {
+      // ピンチ中点を固定したまま拡大率を更新
+      const d = dist(e.touches[0], e.touches[1]);
+      const prev = zoomScale;
+      zoomScale = Math.min(ZOOM_MAX, Math.max(1, pinchScale * (d / pinchDist)));
+      const f = zoomScale / prev;
+      // 中点(pinchCX,pinchCY)がスケール前後で同じ画面位置に来るよう平行移動を補正
+      zoomTX = pinchCX - (pinchCX - zoomTX) * f;
+      zoomTY = pinchCY - (pinchCY - zoomTY) * f;
+      clampPan();
+      applyZoom();
+      e.preventDefault();
+    } else if (e.touches.length === 1) {
+      // 移動が大きければタップ扱いを取り消す
+      if (tapValid &&
+          (Math.abs(e.touches[0].clientX - tapStartX) > TAP_SLOP ||
+           Math.abs(e.touches[0].clientY - tapStartY) > TAP_SLOP)) {
+        tapValid = false;
+      }
+      if (panning) {
+        zoomTX = panTX + (e.touches[0].clientX - panX);
+        zoomTY = panTY + (e.touches[0].clientY - panY);
+        clampPan();
+        applyZoom();
+        e.preventDefault();
+      }
+    }
+  }, { passive: false });
+
+  wrap.addEventListener("touchend", (e) => {
+    if (e.touches.length === 0) {
+      pinchDist = 0; panning = false;
+      // ピンチで等倍以下に戻ったら平行移動もリセット
+      if (zoomScale <= 1) { resetZoom(); }
+      else { clampPan(); applyZoom(); }
+      // ダブルタップ検出（動かず・2本指にならなかった単発タップのみ対象）
+      if (tapValid && e.changedTouches.length === 1) {
+        const now = Date.now();
+        const t = e.changedTouches[0];
+        if (now - lastTap < 300) {
+          toggleDoubleTapZoom(t);
+          lastTap = 0;
+        } else {
+          lastTap = now;
+        }
+      }
+      tapValid = false;
+    }
+  }, { passive: false });
+}
+
+// ダブルタップ: 等倍⇔拡大をトグル。拡大時はタップ位置を中心寄りに表示する。
+function toggleDoubleTapZoom(touch) {
+  if (zoomScale > 1) {
+    resetZoom();
+    return;
+  }
+  const wrap = $("viewer-img").parentElement;
+  const r = wrap.getBoundingClientRect();
+  const cx = touch.clientX - r.left - r.width / 2;
+  const cy = touch.clientY - r.top - r.height / 2;
+  zoomScale = ZOOM_DBL;
+  // タップ点が中心に来るように平行移動（scale 倍した分だけ逆方向へ寄せる）
+  zoomTX = -cx * (ZOOM_DBL - 1);
+  zoomTY = -cy * (ZOOM_DBL - 1);
+  clampPan();
+  applyZoom();
 }
 
 function onKey(e) {
@@ -348,6 +494,7 @@ function showViewerImage() {
   const e = viewerImages[viewerIndex];
   if (!e) return;
   const img = $("viewer-img");
+  resetZoom();                 // 画像切替時は等倍へ戻す
   showSpinner();
   img.onload = hideSpinner;
   img.onerror = hideSpinner;
@@ -397,6 +544,7 @@ function closeViewer() {
 function hideViewer() {
   $("viewer").classList.add("hidden");
   $("viewer-img").src = "";
+  resetZoom();                 // 閉じたら等倍へ戻す
 }
 
 // ===== 動画 =====
